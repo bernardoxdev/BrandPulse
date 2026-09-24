@@ -24,17 +24,7 @@ def calcular_share_of_voice(
 
     total_respostas = len(respostas)
 
-    logger.info(
-        "Total de respostas disponíveis para Share of Voice: %d",
-        total_respostas,
-    )
-
     if total_respostas == 0:
-        logger.info(
-            "Nenhuma resposta encontrada para calcular Share of Voice da marca '%s'",
-            marca,
-        )
-
         return ShareOfVoiceResponse(
             marca=marca,
             respostas_com_mencao=0,
@@ -43,19 +33,15 @@ def calcular_share_of_voice(
             por_plataforma=[],
         )
 
-    respostas_com_marca = repository.listar_por_marca(marca)
+    respostas_com_marca = [
+        resposta
+        for resposta in respostas
+        if any(mencao.marca.lower() == marca.lower() for mencao in resposta.mencoes)
+    ]
 
     quantidade_com_mencao = len(respostas_com_marca)
 
     percentual = (quantidade_com_mencao / total_respostas) * 100
-
-    logger.info(
-        "Marca '%s' encontrada em %d de %d respostas (%.2f%%)",
-        marca,
-        quantidade_com_mencao,
-        total_respostas,
-        percentual,
-    )
 
     plataformas = {}
 
@@ -70,25 +56,13 @@ def calcular_share_of_voice(
     for plataforma, respostas_plataforma in plataformas.items():
         total = len(respostas_plataforma)
 
-        ids_com_marca = {
-            resposta.resposta_id
-            for resposta in respostas_com_marca
-            if resposta.plataforma == plataforma
-        }
-
-        com_mencao = len(ids_com_marca)
+        com_mencao = sum(
+            1
+            for resposta in respostas_plataforma
+            if any(mencao.marca.lower() == marca.lower() for mencao in resposta.mencoes)
+        )
 
         percentual_plataforma = (com_mencao / total) * 100
-
-        logger.info(
-            "Share of Voice da marca '%s' na plataforma '%s': "
-            "%d de %d respostas (%.2f%%)",
-            marca,
-            plataforma,
-            com_mencao,
-            total,
-            percentual_plataforma,
-        )
 
         por_plataforma.append(
             PlatformShare(
@@ -99,20 +73,13 @@ def calcular_share_of_voice(
             )
         )
 
-    resultado = ShareOfVoiceResponse(
+    return ShareOfVoiceResponse(
         marca=marca,
         respostas_com_mencao=quantidade_com_mencao,
         total_respostas=total_respostas,
         percentual=percentual,
         por_plataforma=por_plataforma,
     )
-
-    logger.info(
-        "Cálculo de Share of Voice finalizado para a marca '%s'",
-        marca,
-    )
-
-    return resultado
 
 
 def calcular_score_citacao(resposta: Resposta) -> float:
@@ -192,7 +159,3 @@ def obter_top_citacoes(
     )
 
     return resultado
-
-
-if __name__ == "__main__":
-    pass

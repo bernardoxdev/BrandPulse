@@ -25,7 +25,3 @@ class Resposta(Base):
     mencoes: Mapped[list["Mencao"]] = relationship(
         back_populates="resposta", cascade="all, delete-orphan"
     )
-
-
-if __name__ == "__main__":
-    pass

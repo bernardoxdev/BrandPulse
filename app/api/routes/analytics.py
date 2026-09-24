@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
+from app.core.limiter import limiter
 from app.database.connection import SessionLocal
 from app.repositories.respostas import RespostaRepository
 from app.schemas.analytics import (
@@ -36,9 +37,12 @@ def get_repository():
     ),
     response_description="Dados de Share of Voice da marca.",
 )
+@limiter.limit("10000/minute")
 def share_of_voice(
+    request: Request,
     marca: str = Query(
         min_length=1,
+        max_length=100,
         description="Nome da marca que será analisada.",
         examples=["Acme"],
     ),
@@ -75,7 +79,9 @@ def share_of_voice(
     ),
     response_description="Lista das respostas com maior número de citações.",
 )
+@limiter.limit("10000/minute")
 def top_citacoes(
+    request: Request,
     n: int = Query(
         default=5,
         ge=1,

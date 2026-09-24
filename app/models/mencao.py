@@ -18,7 +18,3 @@ class Mencao(Base):
     ocorrencias: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     resposta: Mapped["Resposta"] = relationship(back_populates="mencoes")
-
-
-if __name__ == "__main__":
-    pass

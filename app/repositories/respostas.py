@@ -50,20 +50,22 @@ class RespostaRepository:
 
     def existe_duplicata(self, resposta: Resposta) -> bool:
         """
-        Verifica se já existe no banco uma resposta com os mesmos
-        dados, desconsiderando o identificador original da resposta.
+        Verifica se já existe no banco uma resposta com o mesmo conteúdo.
 
-        O ID interno do banco também não é considerado, pois ele é
-        gerado automaticamente.
+        O identificador externo da resposta não é considerado na
+        deduplicação. Dessa forma, respostas com IDs diferentes,
+        mas com os mesmos dados, também são consideradas duplicadas.
         """
-        statement = select(Resposta).where(
-            Resposta.pergunta == resposta.pergunta,
-            Resposta.plataforma == resposta.plataforma,
-            Resposta.modelo == resposta.modelo,
-            Resposta.resposta_texto == resposta.resposta_texto,
-            Resposta.data_hora == resposta.data_hora,
-            Resposta.sentimento == resposta.sentimento,
+        mesmo_conteudo = (
+            (Resposta.pergunta == resposta.pergunta)
+            & (Resposta.plataforma == resposta.plataforma)
+            & (Resposta.modelo == resposta.modelo)
+            & (Resposta.resposta_texto == resposta.resposta_texto)
+            & (Resposta.data_hora == resposta.data_hora)
+            & (Resposta.sentimento == resposta.sentimento)
         )
+
+        statement = select(Resposta).where(mesmo_conteudo)
 
         return self.session.scalar(statement) is not None
 
