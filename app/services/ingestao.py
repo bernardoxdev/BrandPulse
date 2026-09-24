@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.database.connection import SessionLocal
+from app.database.init_db import create_tables
 from app.models.mencao import Mencao
 from app.models.resposta import Resposta
 from app.repositories.respostas import RespostaRepository
@@ -19,8 +20,8 @@ def _carregar_dados(caminho: str | Path) -> list[dict]:
     """
     Carrega os dados brutos de um arquivo JSON.
 
-    Essa função é utilizada internamente pela ingestão para que
-    registros inválidos possam ser identificados e contabilizados.
+    Os registros permanecem sem validação para que a ingestão
+    consiga contabilizar os dados inválidos individualmente.
     """
     caminho = Path(caminho)
 
@@ -37,8 +38,7 @@ def carregar_respostas(caminho: str | Path) -> list[RespostaCreate]:
     """
     Carrega e valida respostas armazenadas em um arquivo JSON.
 
-    Registros inválidos são ignorados para que um dado inválido
-    não impeça o carregamento das demais respostas.
+    Registros inválidos são ignorados.
     """
     dados = _carregar_dados(caminho)
 
@@ -47,7 +47,6 @@ def carregar_respostas(caminho: str | Path) -> list[RespostaCreate]:
     for registro in dados:
         try:
             resposta = RespostaCreate.model_validate(registro)
-
         except ValidationError:
             continue
 
@@ -56,20 +55,21 @@ def carregar_respostas(caminho: str | Path) -> list[RespostaCreate]:
     return respostas
 
 
-def processar_respostas(
-    caminho: str | Path,
-) -> dict:
+def processar_respostas(caminho: str | Path) -> dict:
     """
     Importa respostas de um arquivo JSON para o banco de dados.
 
-    Respostas inválidas e duplicadas são ignoradas e contabilizadas
+    O banco e suas tabelas são criados automaticamente caso ainda
+    não existam.
+
+    Registros inválidos e duplicados são ignorados e contabilizados
     separadamente.
 
-    Retorna as estatísticas da ingestão:
-        - total: quantidade total de registros recebidos;
-        - criadas: quantidade de respostas inseridas;
-        - invalidas: quantidade de registros inválidos;
-        - duplicadas: quantidade de respostas duplicadas.
+    Retorna:
+        total: quantidade total de registros recebidos;
+        criadas: quantidade de respostas inseridas;
+        invalidas: quantidade de registros inválidos;
+        duplicadas: quantidade de respostas duplicadas.
     """
     dados = _carregar_dados(caminho)
 
@@ -78,6 +78,10 @@ def processar_respostas(
     invalidas = 0
     duplicadas = 0
 
+    # O CLI não passa pelo lifespan do FastAPI.
+    # Por isso, a ingestão precisa garantir que o banco exista.
+    create_tables()
+
     with SessionLocal() as session:
         repository = RespostaRepository(session)
 
@@ -85,10 +89,13 @@ def processar_respostas(
             try:
                 resposta_validada = RespostaCreate.model_validate(dado)
 
-            except ValidationError:
+            except ValidationError as erro:
                 invalidas += 1
 
-                logger.warning("Registro inválido ignorado durante a ingestão.")
+                logger.warning(
+                    "Registro inválido ignorado durante a ingestão: %s",
+                    erro,
+                )
 
                 continue
 
