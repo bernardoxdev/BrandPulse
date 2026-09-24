@@ -1,135 +1,126 @@
 # Documentação dos Schemas
 
-Os schemas Pydantic definem os contratos de entrada e saída da API.
+Os schemas do BrandPulse utilizam Pydantic para validação e estruturação dos dados.
 
-## `app/schemas/respostas.py`
-
-### `RespostaCreate`
-
-Entrada utilizada para criação de uma resposta.
-
-| Campo | Tipo | Regra |
-|---|---|---|
-| `id` | `str` | mínimo de 1 caractere |
-| `pergunta` | `str` | mínimo de 1 caractere |
-| `plataforma` | `str` | mínimo de 1 caractere |
-| `modelo` | `str \| None` | opcional |
-| `resposta_texto` | `str` | mínimo de 1 caractere |
-| `data_hora` | `datetime` | normalizado antes da validação |
-| `sentimento` | `str \| None` | opcional |
-
-O `field_validator` de `data_hora` aceita os formatos:
+Os principais schemas estão no diretório:
 
 ```text
-YYYY-MM-DDTHH:MM:SS
-YYYY-MM-DD HH:MM:SS
-YYYY-MM-DD
-DD/MM/YYYY
-YYYY/MM/DD
+app/schemas/
 ```
 
-### `RespostasCreate`
+## RespostaCreate
 
-Agrupa uma lista de `RespostaCreate`:
+`RespostaCreate` representa uma resposta recebida pela aplicação.
+
+Os dados de entrada incluem:
+
+- `id`;
+- `pergunta`;
+- `plataforma`;
+- `modelo`;
+- `resposta_texto`;
+- `data_hora`;
+- `sentimento`.
+
+Exemplo:
+
+```json
+{
+  "id": "r001",
+  "pergunta": "Qual a melhor ferramenta?",
+  "plataforma": "ChatGPT",
+  "modelo": "gpt-5.1",
+  "resposta_texto": "A Acme é uma opção.",
+  "data_hora": "2026-01-15T10:00:00",
+  "sentimento": "positivo"
+}
+```
+
+A validação ocorre antes da criação do modelo de banco.
+
+## RespostaResponse
+
+`RespostaResponse` representa uma resposta retornada pela API após a persistência.
+
+Ele estrutura os dados necessários para que o cliente receba a resposta armazenada.
+
+## Analytics
+
+Os schemas de analytics estão em:
 
 ```text
-respostas: list[RespostaCreate]
+app/schemas/analytics.py
 ```
 
-### `MencaoResponse`
+### PlatformShare
 
-Representa uma menção retornada pela API. Utiliza `from_attributes=True` para permitir conversão a partir de objetos ORM.
+Representa o Share of Voice de uma marca em uma plataforma.
 
-| Campo | Tipo |
-|---|---|
-| `id` | `int` |
-| `resposta_id` | `int` |
-| `marca` | `str` |
-| `ocorrencias` | `int` |
-
-### `RespostaResponse`
-
-Representa uma resposta persistida retornada pela API.
-
-| Campo | Tipo |
-|---|---|
-| `id` | `int` |
-| `resposta_id` | `str` |
-| `pergunta` | `str` |
-| `plataforma` | `str` |
-| `modelo` | `str \| None` |
-| `resposta_texto` | `str` |
-| `data_hora` | `datetime` |
-| `sentimento` | `str \| None` |
-| `mencoes` | `list[MencaoResponse]` |
-
-`id` representa o identificador interno do banco; `resposta_id` representa o identificador recebido no dado de origem.
-
-### `StatusResponse`
-
-Estrutura disponível para mensagens de status:
-
-| Campo | Tipo |
-|---|---|
-| `message` | `str` |
-| `respostas_invalidas` | `list[dict]` |
-
----
-
-## `app/schemas/analytics.py`
-
-### `PlatformShare`
-
-Resultado do Share of Voice em uma plataforma.
-
-| Campo | Tipo | Regra |
-|---|---|---|
-| `plataforma` | `str` | — |
-| `respostas_com_mencao` | `int` | `>= 0` |
-| `total_respostas` | `int` | `>= 0` |
-| `percentual` | `float` | `0 <= valor <= 100` |
-
-### `ShareOfVoiceResponse`
-
-Resultado completo do Share of Voice.
-
-| Campo | Tipo | Regra |
-|---|---|---|
-| `marca` | `str` | — |
-| `respostas_com_mencao` | `int` | `>= 0` |
-| `total_respostas` | `int` | `>= 0` |
-| `percentual` | `float` | `0 <= valor <= 100` |
-| `por_plataforma` | `list[PlatformShare]` | — |
-
-### `TopCitacaoResponse`
-
-Item retornado pelo ranking de citações.
-
-| Campo | Tipo | Regra |
-|---|---|---|
-| `resposta_id` | `str` | — |
-| `plataforma` | `str` | — |
-| `modelo` | `str \| None` | opcional |
-| `resposta_texto` | `str` | — |
-| `marcas` | `list[str]` | — |
-| `score` | `float` | `>= 0` |
-
-## Fluxo
+Campos:
 
 ```text
-JSON/HTTP
-   │
-   ▼
-RespostaCreate
-   │
-   ▼
-Services
-   │
-   ▼
-SQLAlchemy
-   │
-   ▼
-RespostaResponse
+plataforma
+respostas_com_mencao
+total_respostas
+percentual
 ```
 
-Os schemas mantêm a validação e o contrato HTTP separados das regras de negócio e da persistência.
+### ShareOfVoiceResponse
+
+Representa o resultado completo do cálculo de Share of Voice.
+
+Campos:
+
+```text
+marca
+respostas_com_mencao
+total_respostas
+percentual
+por_plataforma
+```
+
+### TopCitacaoResponse
+
+Representa uma resposta no ranking de citações.
+
+Inclui informações como:
+
+```text
+resposta_id
+plataforma
+modelo
+resposta_texto
+marcas
+score
+```
+
+## Ingestão
+
+O schema relacionado ao resultado da ingestão está em:
+
+```text
+app/schemas/ingestao.py
+```
+
+Ele permite estruturar as estatísticas produzidas pelo processo de importação.
+
+As métricas da ingestão são:
+
+```text
+total
+criadas
+invalidas
+duplicadas
+```
+
+## Responsabilidade dos schemas
+
+Os schemas não executam regras de negócio.
+
+Sua responsabilidade é:
+
+1. validar dados de entrada;
+2. estruturar dados;
+3. definir contratos de entrada e saída da aplicação.
+
+As regras de negócio permanecem nos services e repositories correspondentes.

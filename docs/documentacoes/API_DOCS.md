@@ -1,197 +1,183 @@
 # Documentação da API
 
-A API do BrandPulse é construída com FastAPI e disponibiliza ingestão, análise e health check.
+## Visão geral
 
-## Endpoints
+O BrandPulse disponibiliza uma API HTTP construída com FastAPI.
 
-| Método | Endpoint | Finalidade |
-|---|---|---|
-| `GET` | `/health` | Verificar se a aplicação está disponível. |
-| `GET` | `/share-of-voice` | Calcular a presença de uma marca nas respostas. |
-| `GET` | `/top-citacoes` | Retornar as respostas com maior score de citação. |
-| `POST` | `/respostas` | Validar, processar e persistir novas respostas. |
+Os endpoints principais são responsáveis por:
 
-A documentação OpenAPI interativa é disponibilizada pelo FastAPI em `/docs`.
+- inserir respostas;
+- calcular Share of Voice;
+- consultar o ranking de citações.
+
+A documentação interativa pode ser acessada pelo FastAPI em `/docs` quando a aplicação estiver em execução.
 
 ---
 
-## `GET /health`
+## POST `/respostas`
 
-Retorna o estado básico da aplicação.
+Insere uma ou mais respostas.
 
-### Resposta `200`
+### Entrada
+
+O endpoint aceita um objeto ou uma lista de objetos.
+
+Exemplo:
 
 ```json
-{"status": "ok"}
+{
+  "id": "r001",
+  "pergunta": "Qual a melhor ferramenta?",
+  "plataforma": "ChatGPT",
+  "modelo": "gpt-5.1",
+  "resposta_texto": "A Acme é uma opção.",
+  "data_hora": "2026-01-15T10:00:00",
+  "sentimento": "positivo"
+}
 ```
+
+Durante o processamento:
+
+1. o registro é validado;
+2. as menções são detectadas;
+3. a plataforma é normalizada;
+4. a duplicidade é verificada;
+5. a resposta é persistida.
+
+Registros inválidos são descartados e respostas duplicadas não são inseridas.
 
 ---
 
-## `GET /share-of-voice`
+## GET `/share-of-voice`
 
-Calcula o percentual de respostas que mencionam a marca informada e apresenta o resultado também por plataforma.
+Calcula o Share of Voice de uma marca.
 
-### Parâmetro
+### Query parameter
 
-| Parâmetro | Tipo | Regra |
-|---|---|---|
-| `marca` | `string` | obrigatório e não vazio |
+`marca`
 
-### Exemplo
+Exemplo:
 
 ```http
 GET /share-of-voice?marca=Acme
 ```
 
-### Resposta `200`
+### Resposta
+
+O retorno contém:
+
+- `marca`;
+- `respostas_com_mencao`;
+- `total_respostas`;
+- `percentual`;
+- `por_plataforma`.
+
+Exemplo conceitual:
 
 ```json
 {
   "marca": "Acme",
-  "respostas_com_mencao": 2,
-  "total_respostas": 4,
-  "percentual": 50.0,
+  "respostas_com_mencao": 4,
+  "total_respostas": 10,
+  "percentual": 40.0,
   "por_plataforma": [
     {
       "plataforma": "ChatGPT",
       "respostas_com_mencao": 2,
-      "total_respostas": 2,
-      "percentual": 100.0
+      "total_respostas": 5,
+      "percentual": 40.0
     }
   ]
 }
 ```
 
-O cálculo considera respostas, e não o número de ocorrências da marca dentro de uma resposta:
+### Regra de contagem
 
-```text
-SOV = (respostas com menção / total de respostas) × 100
-```
+Uma resposta é contabilizada uma única vez para a marca.
 
-### Erros
-
-`422 Unprocessable Content` quando `marca` está ausente, vazia ou inválida.
+Assim, se `"Acme"` aparecer cinco vezes na mesma resposta, ela continua representando apenas uma resposta com menção.
 
 ---
 
-## `GET /top-citacoes`
+## GET `/top-citacoes`
 
-Retorna até `n` respostas com maior score de citação.
+Retorna as respostas com maior score de citação.
 
-### Parâmetro
+### Query parameter
 
-| Parâmetro | Tipo | Padrão | Regra |
-|---|---|---:|---|
-| `n` | `integer` | `5` | deve ser `>= 1` |
+`n`
 
-### Exemplo
+Define a quantidade máxima de resultados.
+
+Exemplo:
 
 ```http
-GET /top-citacoes?n=2
+GET /top-citacoes?n=5
 ```
 
-### Resposta `200`
+O valor padrão é `5`.
 
-```json
-[
-  {
-    "resposta_id": "r002",
-    "plataforma": "ChatGPT",
-    "modelo": "gpt-5.1",
-    "resposta_texto": "Acme e Zenith são conhecidas.",
-    "marcas": ["Acme", "Zenith"],
-    "score": 6.0
-  }
-]
-```
+### Score
 
-O score utilizado atualmente é:
+O score considera:
 
 ```text
-score = (2 × marcas_distintas) + ocorrencias_totais
+quantidade de marcas distintas × 3
++
+quantidade total de ocorrências
 ```
 
-Apenas respostas com pelo menos uma menção participam do ranking.
-
-### Erros
-
-`422 Unprocessable Content` quando `n < 1` ou possui formato inválido.
-
----
-
-## `POST /respostas`
-
-Recebe uma lista de respostas. Cada item é validado individualmente.
-
-O processamento inclui:
-
-1. validação pelo `RespostaCreate`;
-2. normalização da data;
-3. detecção das marcas monitoradas;
-4. normalização da plataforma;
-5. criação das entidades de menção;
-6. verificação de duplicidade;
-7. persistência no SQLite.
-
-### Exemplo
-
-```http
-POST /respostas
-Content-Type: application/json
-```
-
-```json
-[
-  {
-    "id": "r100",
-    "pergunta": "Qual ferramenta é recomendada?",
-    "plataforma": "ChatGPT",
-    "modelo": "gpt-5.1",
-    "resposta_texto": "A Acme é uma boa opção. A Zenith também é conhecida.",
-    "data_hora": "2026-09-22T10:00:00",
-    "sentimento": "positivo"
-  }
-]
-```
-
-### Resposta `201`
-
-A API retorna as respostas criadas, incluindo as menções detectadas.
-
-### Validação parcial
-
-Um item inválido não impede o processamento dos demais. Se nenhuma resposta válida for criada, a API retorna `422` com a relação de dados inválidos.
-
-### Duplicidade
-
-Registros identificados como duplicados são ignorados. Se houver ao menos uma nova resposta válida, o endpoint mantém o status `201` e retorna as respostas criadas.
-
----
-
-## Códigos HTTP
-
-| Código | Uso |
-|---|---|
-| `200` | Consulta ou health check concluído. |
-| `201` | Novas respostas persistidas. |
-| `404` | Rota inexistente. |
-| `422` | Parâmetros ou payload inválidos, ou nenhuma nova resposta criada. |
-| `429` | Limite de requisições excedido. |
-
-A aplicação possui tratamento próprio para rotas inexistentes e para exceder o rate limit.
-
----
-
-## Datas aceitas
-
-O campo `data_hora` aceita:
+Exemplo:
 
 ```text
-YYYY-MM-DDTHH:MM:SS
-YYYY-MM-DD HH:MM:SS
-YYYY-MM-DD
-DD/MM/YYYY
-YYYY/MM/DD
+Acme: 2 ocorrências
+Zenith: 1 ocorrência
+
+2 marcas × 3 + 3 ocorrências = 9
 ```
 
-Após a validação, o valor é representado como `datetime`.
+---
+
+## Rate limiting
+
+Os endpoints de analytics possuem limite configurado pelo `slowapi`.
+
+Os limites definidos atualmente são:
+
+```text
+/share-of-voice → 10000/minute
+/top-citacoes   → 10000/minute
+/respostas      → 50000/minute
+```
+
+---
+
+## Tratamento de erros
+
+A API utiliza os mecanismos de validação do Pydantic e as exceções HTTP do FastAPI.
+
+Dados inválidos não devem ser interpretados como respostas válidas.
+
+---
+
+## Testando a API
+
+Com a aplicação em execução:
+
+```bash
+uv run brandpulse run
+```
+
+A documentação interativa estará disponível em:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Também é possível utilizar o arquivo:
+
+```text
+tests/teste_api.http
+```
+
+para executar requisições durante o desenvolvimento.

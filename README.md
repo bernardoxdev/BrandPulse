@@ -1,229 +1,280 @@
 # BrandPulse
 
-Serviço HTTP para análise de menções de marcas em respostas geradas por ferramentas de IA, como ChatGPT, Gemini e Perplexity.
+O **BrandPulse** é um serviço de análise de menções de marcas em respostas de ferramentas de Inteligência Artificial.
 
-O projeto foi construído como um serviço modular, com validação, detecção determinística de menções, persistência em SQLite e endpoints para análise.
+O projeto recebe respostas de diferentes plataformas de IA, identifica automaticamente as marcas monitoradas presentes nos textos e disponibiliza métricas para analisar a presença dessas marcas nas respostas.
 
-## Objetivo
+## Objetivos
 
-A partir de respostas coletadas por scraping, o BrandPulse:
+O projeto foi desenvolvido para:
 
-- valida e normaliza os dados recebidos;
-- identifica as marcas monitoradas (`Acme`, `Zenith` e `Nimbus`);
-- registra as menções e suas ocorrências;
-- persiste respostas e menções em SQLite;
-- calcula Share of Voice geral e por plataforma;
-- ranqueia respostas por score de citação;
-- disponibiliza tudo por uma API FastAPI.
+- identificar menções de marcas em respostas de IA;
+- contabilizar ocorrências de cada marca;
+- armazenar respostas e suas respectivas menções;
+- calcular **Share of Voice**;
+- comparar a presença das marcas por plataforma;
+- gerar um ranking de respostas com maior relevância de citação;
+- permitir ingestão de respostas por arquivo JSON;
+- disponibilizar os dados por uma API HTTP.
 
-A lista de marcas é atualmente fixa, conforme o escopo do desafio.
+## Marcas monitoradas
 
-## Principais decisões
+Atualmente, o projeto trabalha com as seguintes marcas:
 
-### FastAPI
+- `Acme`
+- `Zenith`
+- `Nimbus`
 
-Escolhido pela validação integrada com Pydantic, tipagem, geração automática de documentação OpenAPI e facilidade de testes com `TestClient`.
-
-### SQLite + SQLAlchemy
-
-SQLite atende ao escopo do desafio e mantém a execução simples, sem exigir um serviço externo de banco. O acesso foi isolado em repositories e models SQLAlchemy, facilitando uma futura migração para PostgreSQL ou outro banco.
-
-### Detecção determinística
-
-As menções são identificadas por expressões regulares, com busca case-insensitive e tolerância a caracteres não alfanuméricos entre as letras da marca. Para o conjunto pequeno e conhecido de marcas, essa abordagem é previsível, barata e facilmente testável.
-
-Exemplos reconhecidos:
-
-```text
-Acme
-ACME
-A.C.M.E.
-A-C-M-E
-A C M E
-```
-
-### Score de citação
-
-Para o ranking de `/top-citacoes`, o score considera diversidade e frequência:
-
-```text
-score = (2 × marcas_distintas) + ocorrencias_totais
-```
-
-Assim, uma resposta que cita várias marcas recebe peso pela diversidade, enquanto repetições também contribuem para o resultado. O score é uma heurística do projeto, não uma avaliação semântica da qualidade da citação.
-
-### Tratamento de dados imperfeitos
-
-Registros inválidos são descartados durante a ingestão para não impedir o processamento dos demais registros. No `POST /respostas`, cada item também é validado individualmente.
-
-A API ainda normaliza nomes de plataformas e datas aceitas pelo schema e evita inserir respostas já existentes segundo o identificador utilizado pela aplicação.
+A detecção é case-insensitive e também contempla algumas variações de escrita definidas pelo serviço de menções.
 
 ## Arquitetura
 
-```text
-HTTP
- │
- ▼
-Routes
- │
- ├── Schemas (validação)
- │
- ├── Services (regras de negócio)
- │
- └── Repositories (persistência)
-          │
-          ▼
-       SQLAlchemy
-          │
-          ▼
-        SQLite
-```
-
-Estrutura principal:
+A estrutura principal do projeto é:
 
 ```text
 BrandPulse/
 ├── app/
-│   ├── api/routes/        # endpoints HTTP
-│   ├── core/              # logging e rate limiting
-│   ├── database/          # conexão e inicialização do banco
-│   ├── models/            # entidades SQLAlchemy
-│   ├── repositories/      # acesso aos dados
-│   ├── schemas/           # contratos Pydantic
-│   └── services/          # regras de negócio
-├── data/                  # SQLite e dados de exemplo
-├── docs/                  # documentação técnica
-├── tests/                 # testes automatizados e fixtures
+│   ├── api/
+│   │   └── routes/
+│   │       ├── analytics.py
+│   │       └── respostas.py
+│   ├── core/
+│   ├── database/
+│   ├── models/
+│   ├── repositories/
+│   ├── schemas/
+│   ├── services/
+│   │   ├── analytics.py
+│   │   ├── ingestao.py
+│   │   ├── mencoes.py
+│   │   └── plataformas.py
+│   ├── cli.py
+│   └── main.py
+├── data/
+│   ├── respostas_exemplo.json
+│   └── database.db
+├── docs/
+├── tests/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
-└── uv.lock
+└── README.md
 ```
+
+### Camadas
+
+- **API**: expõe os endpoints HTTP.
+- **Services**: concentra as regras de negócio.
+- **Repositories**: centraliza o acesso ao banco.
+- **Models**: representa as entidades persistidas.
+- **Schemas**: valida e estrutura os dados de entrada e saída.
+- **Database**: configura a persistência.
+- **CLI**: fornece comandos para operação do projeto.
+- **Tests**: contém os testes automatizados.
+
+## Tecnologias
+
+- Python 3.11
+- FastAPI
+- SQLAlchemy
+- Pydantic
+- SQLite
+- Uvicorn
+- pytest
+- Ruff
+- Docker / Docker Compose
+- uv
+
+## Instalação
+
+Instale as dependências utilizando `uv`:
+
+```bash
+uv sync
+```
+
+Para executar os testes:
+
+```bash
+uv run pytest -v
+```
+
+Para verificar o código com Ruff:
+
+```bash
+uv run ruff check .
+```
+
+Para verificar a formatação:
+
+```bash
+uv run ruff format --check .
+```
+
+## Executando a API
+
+A API pode ser iniciada pelo CLI:
+
+```bash
+uv run brandpulse run
+```
+
+Também é possível definir host, porta e hot reload:
+
+```bash
+uv run brandpulse run --host 127.0.0.1 --port 8000 --reload
+```
+
+A documentação interativa da API fica disponível no FastAPI em:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Ingestão de respostas
+
+O BrandPulse possui um comando específico para importar respostas de um arquivo JSON:
+
+```bash
+uv run brandpulse ingest data/respostas_exemplo.json
+```
+
+A ingestão apresenta:
+
+- quantidade total de registros recebidos;
+- quantidade de respostas criadas;
+- quantidade de registros inválidos;
+- quantidade de respostas duplicadas.
+
+Exemplo:
+
+```text
+Respostas recebidas: 10
+Respostas criadas: 8
+Respostas inválidas: 1
+Respostas duplicadas: 1
+```
+
+Registros inválidos não interrompem o processamento dos demais registros.
+
+Uma resposta é considerada duplicada de acordo com os critérios definidos no `RespostaRepository`.
+
+## Formato de entrada
+
+Os registros de entrada seguem o modelo `RespostaCreate`.
+
+Exemplo:
+
+```json
+{
+  "id": "r001",
+  "pergunta": "Qual a melhor ferramenta de monitoramento?",
+  "plataforma": "ChatGPT",
+  "modelo": "gpt-5.1",
+  "resposta_texto": "A Acme é uma opção.",
+  "data_hora": "2026-01-15T10:00:00",
+  "sentimento": "positivo"
+}
+```
+
+O arquivo utilizado pela ingestão deve conter uma lista de objetos.
 
 ## API
 
-### `GET /health`
-
-Health check simples da aplicação.
-
-```http
-GET /health
-```
-
-Resposta:
-
-```json
-{"status": "ok"}
-```
-
-### `GET /share-of-voice`
-
-Calcula a proporção de respostas que mencionam uma marca, incluindo o detalhamento por plataforma.
+### Share of Voice
 
 ```http
 GET /share-of-voice?marca=Acme
 ```
 
-### `GET /top-citacoes`
+Retorna a participação da marca entre as respostas armazenadas, incluindo a distribuição por plataforma.
 
-Retorna as respostas com maior score de citação.
+O cálculo considera uma resposta como uma unidade: múltiplas ocorrências da mesma marca dentro da mesma resposta não fazem aquela resposta ser contabilizada mais de uma vez.
+
+### Top citações
 
 ```http
 GET /top-citacoes?n=5
 ```
 
-`n` possui valor padrão `5` e deve ser maior ou igual a `1`.
+Retorna as respostas com maior score de citação.
 
-### `POST /respostas`
+O score considera:
 
-Recebe uma lista de respostas, valida cada item, detecta as marcas mencionadas, normaliza a plataforma, verifica duplicidade e persiste os registros válidos.
+- quantidade de marcas distintas mencionadas;
+- quantidade total de ocorrências das marcas.
 
-```http
-POST /respostas
-Content-Type: application/json
-```
+## Testes
 
-Exemplo:
-
-```json
-[
-  {
-    "id": "r001",
-    "pergunta": "Qual a melhor ferramenta?",
-    "plataforma": "ChatGPT",
-    "modelo": "gpt-5",
-    "resposta_texto": "A Acme é uma boa opção.",
-    "data_hora": "2026-09-22T10:00:00",
-    "sentimento": "positivo"
-  }
-]
-```
-
-A documentação interativa pode ser acessada em `/docs` quando a API estiver em execução.
-
-## Executando localmente
-
-Requisitos: Python 3.11+ e `uv`.
+Os testes podem ser executados com:
 
 ```bash
-uv sync
-uv run uvicorn app.main:app --reload
+uv run pytest -v
 ```
 
-A API ficará disponível em `http://localhost:8000`.
+O projeto possui testes unitários, testes de rotas e testes de regressão para cenários importantes, incluindo:
 
-## Executando com Docker
+- respostas sem menções;
+- múltiplas ocorrências de uma marca;
+- comparação case-insensitive;
+- Share of Voice por plataforma;
+- respostas com o mesmo identificador externo;
+- cálculo de score;
+- ranking de citações;
+- ingestão de registros inválidos;
+- detecção de duplicidades.
+
+## Docker
+
+Para executar o projeto com Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-O Compose monta `./data` em `/app/data` e `./logs` em `/app/logs`. Dessa forma, o SQLite utilizado pelo container permanece no diretório do projeto e pode ser compartilhado com a execução local.
-
-Para verificar o container:
+Para executar em segundo plano:
 
 ```bash
-docker compose ps
+docker compose up --build -d
 ```
 
-O Compose possui health check em `/health`.
+## Qualidade de código
 
-## Testes e qualidade
+O projeto utiliza Ruff para linting e formatação e pre-commit para automatizar verificações antes dos commits.
 
-Os testes utilizam `pytest` e o `TestClient` do FastAPI. Os testes de API utilizam banco isolado para não depender dos dados persistidos no ambiente de desenvolvimento.
+Antes de realizar um commit, é recomendado executar:
 
 ```bash
-uv run pytest
+uv run pytest -v
 uv run ruff check .
 uv run ruff format --check .
 ```
 
-Também existe `tests/teste_api.http` para testes manuais dos endpoints.
-
-## Logs
-
-O logging é configurado em `app/core/logging.py` e enviado para o console e para `logs/app.log`.
-
-São utilizados principalmente `INFO` para eventos relevantes da aplicação e `DEBUG` para detalhes de diagnóstico. O conteúdo completo das respostas não é registrado nos logs.
-
 ## Documentação
 
-- [`docs/documentacoes/API_DOCS.md`](docs/documentacoes/API_DOCS.md) — endpoints, parâmetros, respostas e exemplos.
-- [`docs/documentacoes/SCHEMAS_DOCS.md`](docs/documentacoes/SCHEMAS_DOCS.md) — contratos Pydantic.
-- [`docs/documentacoes/ESTRUTURA_DOCS.md`](docs/documentacoes/ESTRUTURA_DOCS.md) — organização e responsabilidades das camadas.
-- [`docs/STEP_BY_STEP.md`](docs/STEP_BY_STEP.md) — histórico do desenvolvimento.
-- [`SECURITY.md`](SECURITY.md) — considerações de segurança.
+A documentação complementar está organizada em `docs/`:
 
-## O que eu faria com mais tempo
+- [Passo a passo do projeto](docs/STEP_BY_STEP.md)
+- [Documentação da API](docs/documentacoes/API_DOCS.md)
+- [Estrutura da documentação](docs/documentacoes/ESTRUTURA_DOCS.md)
+- [Documentação dos schemas](docs/documentacoes/SCHEMAS_DOCS.md)
 
-- Migraria o SQLite para PostgreSQL em um ambiente de produção.
-- Adicionaria migrações de banco com Alembic.
-- Transformaria a lista de marcas monitoradas em configuração persistida, com suporte a aliases.
-- Ampliaria a análise semântica de citações, separando frequência de contexto, sentimento e posição da marca na resposta.
-- Adicionaria métricas e observabilidade mais completas, como latência por endpoint e métricas de negócio.
-- Configuraria CI/CD para executar lint, testes e cobertura a cada alteração.
-- Adicionaria autenticação e configuração de CORS/rate limiting adequada ao ambiente de produção.
+## Limitações e melhorias futuras
+
+### Detecção de marcas com regex
+
+A detecção atual baseada em expressões regulares possui uma limitação conhecida: **regexes podem aceitar textos que não deveriam ser considerados menções**, como em casos semelhantes a `"parâmetros A, C, M e N"`, e também podem rejeitar textos que deveriam ser aceitos, como `"AcmeLTDA"`.
+
+Uma melhoria futura desejável é tornar a identificação de marcas mais robusta, buscando uma estratégia pragmática que reduza falsos positivos e falsos negativos sem tornar excessivamente complexa a manutenção das regras de detecção.
+
+Outras melhorias futuras podem incluir:
+
+- evolução das regras de normalização de marcas;
+- maior cobertura de casos de detecção;
+- persistência em PostgreSQL para ambientes maiores;
+- expansão das métricas de análise;
+- melhorias no tratamento de concorrência durante ingestões.
 
 ## Licença
 
-Consulte [`LICENSE`](LICENSE).
+Consulte o arquivo `LICENSE` para obter os termos de utilização do projeto.
