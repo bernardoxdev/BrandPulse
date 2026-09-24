@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Configurar Python
+        run: uv python install 3.11
+
+      - name: Instalar dependências
+        run: uv sync --locked
+
+      - name: Executar pre-commit
+        run: uv run pre-commit run --all-files
+
+      - name: Executar testes
+        run: uv run pytest
