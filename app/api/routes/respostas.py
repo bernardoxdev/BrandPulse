@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.core.limiter import limiter
 from app.database.connection import SessionLocal
 from app.models.mencao import Mencao
 from app.models.resposta import Resposta
@@ -25,31 +26,36 @@ def get_repository():
 
 @router.post(
     "/respostas",
-    response_model=list[RespostaResponse],
+    response_model=RespostaResponse | list[RespostaResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Cria novas respostas",
     description=(
-        "Recebe uma lista de respostas, valida cada item individualmente, "
+        "Recebe uma resposta ou uma lista de respostas, valida cada item, "
         "descarta os dados inválidos, detecta automaticamente as menções "
         "de marcas presentes no texto e persiste as respostas válidas "
         "e suas respectivas menções."
     ),
     response_description="Lista das respostas válidas criadas.",
 )
+@limiter.limit("50000/minute")
 def criar_respostas(
-    dados: list[dict],
+    request: Request,
+    dados: dict | list[dict],
     repository: RespostaRepository = Depends(get_repository),
 ):
+    entrada_individual = isinstance(dados, dict)
+    itens = [dados] if entrada_individual else dados
+
     logger.info(
         "Iniciando processamento de %d respostas.",
-        len(dados),
+        len(itens),
     )
 
     respostas = []
     respostas_invalidas = []
     duplicadas = 0
 
-    for indice, dado in enumerate(dados, start=1):
+    for indice, dado in enumerate(itens, start=1):
         try:
             resposta_validada = RespostaCreate.model_validate(dado)
 
@@ -137,7 +143,7 @@ def criar_respostas(
     )
 
     if respostas:
-        return respostas
+        return respostas[0] if entrada_individual else respostas
 
     logger.warning(
         "Nenhuma resposta foi criada. Todas as entradas eram inválidas ou duplicadas."
