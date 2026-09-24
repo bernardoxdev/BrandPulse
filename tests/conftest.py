@@ -53,3 +53,12 @@ def client(test_engine):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def repository(test_engine):
+    """
+    Cria um RespostaRepository usando o banco de testes.
+    """
+    with Session(test_engine) as session:
+        yield RespostaRepository(session)
